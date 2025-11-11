@@ -2,91 +2,64 @@ pipeline {
     agent any
 
     environment {
-        NETLIFY_AUTH_TOKEN = credentials('netlify-token') // اسم الـ credential في Jenkins
+        NETLIFY_AUTH_TOKEN = credentials('netlify-token') // ضع هنا الـ Jenkins Credential المناسب
     }
 
     stages {
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
-                checkout scm
+                // استنساخ المشروع من GitHub
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[url: 'https://github.com/CHERGUI-05/learn-jenkins-app.git']]
+                ])
             }
         }
 
         stage('Build') {
-            agent {
-                docker {
-                    image 'node:18-bullseye'
-                    args '-u 1000:1000'
-                    reuseNode true
-                }
-            }
             steps {
-                sh '''
-                    echo "Node version:"
-                    node --version
-                    echo "NPM version:"
-                    npm --version
-                    npm ci
-                    npm run build
-                '''
+                script {
+                    // تشغيل npm داخل Docker container بدون مشاكل الأذونات
+                    docker.image('node:18-bullseye').inside("-v ${env.WORKSPACE}:${env.WORKSPACE} -w ${env.WORKSPACE}") {
+                        sh 'npm ci'
+                        sh 'npm run build'
+                    }
+                }
             }
         }
 
         stage('Tests') {
             parallel {
                 stage('Unit tests') {
-                    agent {
-                        docker {
-                            image 'node:18-bullseye'
-                            args '-u 1000:1000'
-                            reuseNode true
-                        }
-                    }
                     steps {
-                        sh '''
-                            npm test
-                        '''
-                        junit '**/test-results/*.xml'
+                        script {
+                            docker.image('node:18-bullseye').inside("-v ${env.WORKSPACE}:${env.WORKSPACE} -w ${env.WORKSPACE}") {
+                                sh 'npm test'
+                                junit '**/junit.xml'  // إذا كنت تستخدم Jest مع jest-junit
+                            }
+                        }
                     }
                 }
 
-                stage('E2E') {
-                    agent {
-                        docker {
-                            image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
-                            args '-u 1000:1000'
-                            reuseNode true
-                        }
-                    }
+                stage('E2E tests') {
                     steps {
-                        sh '''
-                            npm install -g serve
-                            serve -s build & sleep 10
-                            npx playwright test --reporter=html
-                        '''
-                        publishHTML(target: [
-                            reportDir: 'playwright-report',
-                            reportFiles: 'index.html',
-                            reportName: 'Playwright HTML Report'
-                        ])
+                        script {
+                            docker.image('mcr.microsoft.com/playwright:v1.39.0-jammy').inside("-v ${env.WORKSPACE}:${env.WORKSPACE} -w ${env.WORKSPACE}") {
+                                sh 'npx playwright test'
+                            }
+                        }
                     }
                 }
             }
         }
 
         stage('Deploy') {
-            agent {
-                docker {
-                    image 'node:18-bullseye'
-                    args '-u 1000:1000'
-                    reuseNode true
-                }
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
-                sh '''
-                    npm install netlify-cli --no-save
-                    npx netlify deploy --dir=build --prod
-                '''
+                echo 'Deployment stage (Add your deploy commands here)'
+                // مثال: sh 'npx netlify deploy --prod'
             }
         }
     }
@@ -94,9 +67,6 @@ pipeline {
     post {
         always {
             echo 'Pipeline finished.'
-        }
-        success {
-            echo 'Pipeline completed successfully!'
         }
         failure {
             echo 'Pipeline failed!'
