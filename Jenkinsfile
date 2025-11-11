@@ -6,8 +6,7 @@ pipeline {
         NETLIFY_AUTH_TOKEN = credentials('netlify-token')
     }
 
-     stages {
-
+    stages {
         stage('Build') {
             agent {
                 docker {
@@ -36,12 +35,8 @@ pipeline {
                             reuseNode true
                         }
                     }
-
                     steps {
-                        sh '''
-                            #test -f build/index.html
-                            npm test
-                        '''
+                        sh 'npm test'
                     }
                     post {
                         always {
@@ -57,49 +52,41 @@ pipeline {
                             reuseNode true
                         }
                     }
-
                     steps {
                         sh '''
                             npm install serve
                             node_modules/.bin/serve -s build &
                             sleep 10
-                            npx playwright test  --reporter=html
+                            npx playwright test --reporter=html
                         '''
                     }
-
                     post {
                         always {
-                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright HTML Report', reportTitles: '', useWrapperFileDirectly: true])
+                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright HTML Report', useWrapperFileDirectly: true])
                         }
                     }
                 }
             }
         }
-     }
-        stage('Deploy') {
-    agent {
-        docker {
-            image 'node:18-bullseye'
-            args '-u 1000:1000 -v /var/jenkins_home/workspace/learn-jenkins-app:/var/jenkins_home/workspace/learn-jenkins-app'
-            reuseNode true
+
+        stage('Deploy') {  // <-- الآن داخل stages
+            agent {
+                docker {
+                    image 'node:18-bullseye'
+                    args '-u 1000:1000 -v /var/jenkins_home/workspace/learn-jenkins-app:/var/jenkins_home/workspace/learn-jenkins-app'
+                    reuseNode true
+                }
+            }
+            steps {
+                dir('/var/jenkins_home/workspace/learn-jenkins-app') {
+                    sh 'ls -la'
+                    sh 'node --version'
+                    sh 'npm --version'
+                    sh 'npm install netlify-cli --no-save'
+                    sh 'npx netlify status'
+                    sh 'npx netlify deploy --dir=build --prod'
+                }
+            }
         }
     }
-    steps {
-        dir('/var/jenkins_home/workspace/learn-jenkins-app') {
-            // تحقق من الملفات ونسخة npm
-            sh 'ls -la'
-            sh 'node --version'
-            sh 'npm --version'
-            
-            // تثبيت Netlify CLI إذا لم يكن مثبت
-            sh 'npm install netlify-cli --no-save'
-
-            // تسجيل الدخول أو التأكد من المستخدم الحالي
-            sh 'npx netlify status'
-
-            // النشر على Netlify
-            sh 'npx netlify deploy --dir=build --prod'
-        }
-    }
-}
 }
