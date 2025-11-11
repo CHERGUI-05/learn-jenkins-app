@@ -75,7 +75,7 @@ pipeline {
                 }
             }
         }
-
+     }
         stage('Deploy') {
     agent {
         docker {
@@ -101,4 +101,5 @@ pipeline {
             sh 'npx netlify deploy --dir=build --prod'
         }
     }
+}
 }
