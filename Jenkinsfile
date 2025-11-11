@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        NETLIFY_AUTH_TOKEN = credentials('NETLIFY_AUTH_TOKEN') // اسم الـ credential في Jenkins
+        NETLIFY_AUTH_TOKEN = credentials('netlify-token') // اسم الـ credential في Jenkins
     }
 
     stages {
